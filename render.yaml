@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: unsently
+    runtime: node
+    plan: starter
+    buildCommand: npm ci && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/notes
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATA_DIR
+        value: /data
+    disk:
+      name: unsently-data
+      mountPath: /data
+      sizeGB: 1
