@@ -1,26 +1,65 @@
 import { useState } from 'react'
 import type { Note } from '../lib/types'
+import { ApiError, deleteNote } from '../lib/api'
 import { NoteCard } from './NoteCard'
 import { FeedSkeleton } from './FeedSkeleton'
+import { ConfirmDialog } from './ConfirmDialog'
 import { Lightbox } from './Lightbox'
 import { DoodleArrow, DoodleHeart, DoodleScribble, DoodleStar } from './Doodles'
+
+function describeNote(note: Note): string {
+  const from = note.senderName ? `From ${note.senderName}` : 'Anonymous'
+  const to = note.recipientName ? ` to ${note.recipientName}` : ''
+  const text = note.text.trim()
+  const preview = text
+    ? `“${text.length > 90 ? `${text.slice(0, 90)}…` : text}”`
+    : 'Image or music only'
+  return `${from}${to} · ${preview}`
+}
 
 interface HomePageProps {
   notes: Note[]
   loading: boolean
   error: string | null
+  isAdmin: boolean
   onRetry: () => void
   onWrite: () => void
+  onNoteDeleted: (id: string) => void
+  notify: (message: string) => void
 }
 
 export function HomePage({
   notes,
   loading,
   error,
+  isAdmin,
   onRetry,
   onWrite,
+  onNoteDeleted,
+  notify,
 }: HomePageProps) {
   const [lightbox, setLightbox] = useState<string | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<Note | null>(null)
+  const [deleting, setDeleting] = useState(false)
+
+  async function handleDelete() {
+    if (!deleteTarget) return
+    setDeleting(true)
+    try {
+      await deleteNote(deleteTarget.id)
+      onNoteDeleted(deleteTarget.id)
+      setDeleteTarget(null)
+      notify('Deleted')
+    } catch (deleteError) {
+      notify(
+        deleteError instanceof ApiError
+          ? deleteError.message
+          : 'Could not delete note.',
+      )
+    } finally {
+      setDeleting(false)
+    }
+  }
 
   return (
     <>
@@ -58,11 +97,25 @@ export function HomePage({
                 note={note}
                 index={index}
                 onImageOpen={setLightbox}
+                onDelete={isAdmin ? () => setDeleteTarget(note) : undefined}
               />
             ))}
           </div>
         )}
       </main>
+
+      <ConfirmDialog
+        open={Boolean(deleteTarget)}
+        title="Delete this note?"
+        description={deleteTarget ? describeNote(deleteTarget) : undefined}
+        confirmLabel="Delete"
+        danger
+        busy={deleting}
+        onConfirm={() => void handleDelete()}
+        onCancel={() => {
+          if (!deleting) setDeleteTarget(null)
+        }}
+      />
 
       <Lightbox
         src={lightbox}

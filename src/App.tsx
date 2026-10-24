@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Note, Tab } from './lib/types'
-import { fetchNotes } from './lib/api'
+import { fetchAdminSession, fetchNotes } from './lib/api'
 import { NavBar } from './components/NavBar'
 import { HomePage } from './components/HomePage'
 import { NotesPage } from './components/NotesPage'
 import { AboutPage } from './components/AboutPage'
+import { AdminDialog } from './components/AdminDialog'
 import { Toast } from './components/Toast'
 import { ConfirmDialog } from './components/ConfirmDialog'
 
@@ -16,6 +17,9 @@ export default function App() {
   const [dirty, setDirty] = useState(false)
   const [pendingTab, setPendingTab] = useState<Tab | null>(null)
   const [toast, setToast] = useState<string | null>(null)
+  const [isAdmin, setIsAdmin] = useState(false)
+  const [adminEnabled, setAdminEnabled] = useState(false)
+  const [adminOpen, setAdminOpen] = useState(false)
   const toastTimer = useRef<number | null>(null)
 
   const notify = useCallback((message: string) => {
@@ -30,6 +34,22 @@ export default function App() {
   useEffect(() => {
     return () => {
       if (toastTimer.current) window.clearTimeout(toastTimer.current)
+    }
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    fetchAdminSession()
+      .then((session) => {
+        if (cancelled) return
+        setIsAdmin(session.isAdmin)
+        setAdminEnabled(session.enabled)
+      })
+      .catch(() => {
+        // The public site still works if the admin check fails.
+      })
+    return () => {
+      cancelled = true
     }
   }, [])
 
@@ -96,17 +116,30 @@ export default function App() {
     void loadFeed()
   }, [loadFeed])
 
+  const handleNoteDeleted = useCallback((id: string) => {
+    setFeed((current) => current.filter((note) => note.id !== id))
+  }, [])
+
   return (
     <div className="min-h-screen">
-      <NavBar active={tab} onChange={handleNavigate} />
+      <NavBar
+        active={tab}
+        onChange={handleNavigate}
+        isAdmin={isAdmin}
+        adminEnabled={adminEnabled}
+        onAdminClick={() => setAdminOpen(true)}
+      />
 
       {tab === 'home' ? (
         <HomePage
           notes={feed}
           loading={loading}
           error={feedError}
+          isAdmin={isAdmin}
           onRetry={() => void loadFeed()}
           onWrite={() => handleNavigate('notes')}
+          onNoteDeleted={handleNoteDeleted}
+          notify={notify}
         />
       ) : null}
 
@@ -120,8 +153,22 @@ export default function App() {
       ) : null}
 
       {tab === 'about' ? (
-        <AboutPage onDirtyChange={setDirty} notify={notify} />
+        <AboutPage
+          key={isAdmin ? 'admin' : 'guest'}
+          onDirtyChange={setDirty}
+          notify={notify}
+        />
       ) : null}
+
+      <AdminDialog
+        open={adminOpen}
+        isAdmin={isAdmin}
+        enabled={adminEnabled}
+        onClose={() => setAdminOpen(false)}
+        onLoggedIn={() => setIsAdmin(true)}
+        onLoggedOut={() => setIsAdmin(false)}
+        notify={notify}
+      />
 
       <Toast message={toast} />
 

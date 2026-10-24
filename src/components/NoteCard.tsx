@@ -5,12 +5,13 @@ import { formatFullDate, formatTimestamp } from '../lib/format'
 import { useAudioPreview } from '../hooks/useAudioPreview'
 import { AnonMark, NoteDecoration } from './Doodles'
 import { Artwork } from './Artwork'
-import { PauseIcon, PlayIcon, Spinner } from './Icons'
+import { PauseIcon, PlayIcon, Spinner, TrashIcon } from './Icons'
 
 interface NoteCardProps {
   note: Note
   preview?: boolean
   onImageOpen?: (url: string) => void
+  onDelete?: () => void
   index?: number
 }
 
@@ -18,6 +19,7 @@ export function NoteCard({
   note,
   preview = false,
   onImageOpen,
+  onDelete,
   index,
 }: NoteCardProps) {
   const paper = paperFor(note.design.paper)
@@ -42,7 +44,20 @@ export function NoteCard({
   ) : null
 
   const footer = !preview ? (
-    <div className="mt-4 flex justify-end">
+    <div className="mt-4 flex items-center justify-between gap-3">
+      <div>
+        {onDelete ? (
+          <button
+            type="button"
+            onClick={onDelete}
+            className="icon-btn !h-7 !w-7 !border-[#8f3f34]/35 !text-[#8f3f34]"
+            aria-label="Delete note"
+            title="Delete note"
+          >
+            <TrashIcon size={13} />
+          </button>
+        ) : null}
+      </div>
       <time
         dateTime={note.createdAt}
         title={formatFullDate(note.createdAt)}

@@ -32,6 +32,29 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
   return data as T
 }
 
+export interface AdminSession {
+  enabled: boolean
+  isAdmin: boolean
+}
+
+export async function fetchAdminSession(): Promise<AdminSession> {
+  return request<AdminSession>('/api/admin/session')
+}
+
+export async function loginAdmin(password: string): Promise<void> {
+  await request<{ isAdmin: true }>('/api/admin/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ password }),
+  })
+}
+
+export async function logoutAdmin(): Promise<void> {
+  await request<{ ok: true }>('/api/admin/logout', {
+    method: 'POST',
+  })
+}
+
 export async function fetchNotes(): Promise<Note[]> {
   const data = await request<{ notes: Note[] }>('/api/notes')
   return data.notes

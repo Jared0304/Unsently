@@ -3,6 +3,7 @@ import type { Tab } from '../lib/types'
 import {
   AboutIcon,
   HomeIcon,
+  LockIcon,
   NotesIcon,
 } from './Icons'
 import { DoodleScribble, DoodleStar } from './Doodles'
@@ -10,6 +11,9 @@ import { DoodleScribble, DoodleStar } from './Doodles'
 interface NavBarProps {
   active: Tab
   onChange: (tab: Tab) => void
+  isAdmin: boolean
+  adminEnabled: boolean
+  onAdminClick: () => void
 }
 
 type TabIcon = ComponentType<SVGProps<SVGSVGElement> & { size?: number }>
@@ -20,7 +24,13 @@ const TABS: Array<{ key: Tab; label: string; Icon: TabIcon }> = [
   { key: 'about', label: 'About', Icon: AboutIcon },
 ]
 
-export function NavBar({ active, onChange }: NavBarProps) {
+export function NavBar({
+  active,
+  onChange,
+  isAdmin,
+  adminEnabled,
+  onAdminClick,
+}: NavBarProps) {
   return (
     <>
       <header className="sticky top-0 z-30 border-b border-ink/10 bg-paper/85 backdrop-blur-md">
@@ -38,30 +48,48 @@ export function NavBar({ active, onChange }: NavBarProps) {
             <DoodleScribble className="absolute -bottom-1.5 left-4 h-2.5 w-[5.6rem] text-ink/25" />
           </button>
 
-          <nav
-            className="hidden items-center gap-1 rounded-[18px_14px_20px_15px] border-[1.5px] border-ink/30 bg-cream/60 p-1 md:flex"
-            aria-label="Main"
-          >
-            {TABS.map(({ key, label, Icon }) => {
-              const isActive = active === key
-              return (
-                <button
-                  key={key}
-                  type="button"
-                  onClick={() => onChange(key)}
-                  aria-current={isActive ? 'page' : undefined}
-                  className={`flex items-center gap-1.5 rounded-[12px_9px_14px_10px] border-[1.5px] px-3 py-1.5 text-[0.8rem] font-bold transition ${
-                    isActive
-                      ? 'border-ink/40 bg-butter text-ink shadow-[1px_2px_0_rgba(44,42,38,0.06)]'
-                      : 'border-transparent text-softink hover:bg-white/55 hover:text-ink'
-                  }`}
-                >
-                  <Icon size={17} />
-                  <span>{label}</span>
-                </button>
-              )
-            })}
-          </nav>
+          <div className="flex items-center gap-2">
+            <nav
+              className="hidden items-center gap-1 rounded-[18px_14px_20px_15px] border-[1.5px] border-ink/30 bg-cream/60 p-1 md:flex"
+              aria-label="Main"
+            >
+              {TABS.map(({ key, label, Icon }) => {
+                const isActive = active === key
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => onChange(key)}
+                    aria-current={isActive ? 'page' : undefined}
+                    className={`flex items-center gap-1.5 rounded-[12px_9px_14px_10px] border-[1.5px] px-3 py-1.5 text-[0.8rem] font-bold transition ${
+                      isActive
+                        ? 'border-ink/40 bg-butter text-ink shadow-[1px_2px_0_rgba(44,42,38,0.06)]'
+                        : 'border-transparent text-softink hover:bg-white/55 hover:text-ink'
+                    }`}
+                  >
+                    <Icon size={17} />
+                    <span>{label}</span>
+                  </button>
+                )
+              })}
+            </nav>
+
+            {adminEnabled || isAdmin ? (
+              <button
+                type="button"
+                onClick={onAdminClick}
+                className={`icon-btn !h-9 !w-9 ${
+                  isAdmin
+                    ? '!border-ink/70 !bg-butter shadow-[1px_2px_0_rgba(44,42,38,0.08)]'
+                    : ''
+                }`}
+                aria-label={isAdmin ? 'Admin settings' : 'Admin sign in'}
+                title={isAdmin ? 'Admin settings' : 'Admin sign in'}
+              >
+                <LockIcon size={16} />
+              </button>
+            ) : null}
+          </div>
         </div>
       </header>
 

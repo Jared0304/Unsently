@@ -7,5 +7,7 @@ export const DATA_DIR = path.resolve(process.env.DATA_DIR || 'data')
 export const UPLOAD_DIR = path.join(DATA_DIR, 'uploads')
 export const DB_PATH = path.join(DATA_DIR, 'unsently.db')
 export const IS_PROD = process.env.NODE_ENV === 'production'
+export const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || ''
+export const DEFAULT_ABOUT_IMAGE = 'about-default.webp'
 
 fs.mkdirSync(UPLOAD_DIR, { recursive: true })

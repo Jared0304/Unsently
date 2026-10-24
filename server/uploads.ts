@@ -1,9 +1,10 @@
 import crypto from 'node:crypto'
+import fsSync from 'node:fs'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import sharp from 'sharp'
 import multer from 'multer'
-import { UPLOAD_DIR } from './config.js'
+import { DEFAULT_ABOUT_IMAGE, UPLOAD_DIR } from './config.js'
 
 const MAX_BYTES = 8 * 1024 * 1024
 
@@ -32,6 +33,16 @@ export const upload = multer({
     callback(null, true)
   },
 })
+
+export function ensureDefaultAboutImage(): void {
+  const destination = path.join(UPLOAD_DIR, DEFAULT_ABOUT_IMAGE)
+  if (fsSync.existsSync(destination)) return
+
+  const source = path.resolve('public', DEFAULT_ABOUT_IMAGE)
+  if (fsSync.existsSync(source)) {
+    fsSync.copyFileSync(source, destination)
+  }
+}
 
 export async function saveImage(file: Express.Multer.File): Promise<string> {
   const filename = `${crypto.randomUUID()}.webp`

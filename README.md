@@ -4,7 +4,8 @@ Unsently is a small, self-hosted anonymous note-sharing app. It has three
 tabs: **Home**, **Notes**, and **About**. Notes can include optional names, an
 image (or a camera capture on mobile), and an authorized music preview. Notes
 are editable and deletable by the browser that created them. The About page can
-be edited by the first browser that saves it.
+be edited by the first browser that saves it. An optional admin password unlocks
+moderation from any browser: delete any note and edit the About page.
 
 The app is designed as a quiet paper-and-ink space: warm paper, dark doodle
 outlines, pastel accents, handwritten headings, imperfect borders, restrained
@@ -70,6 +71,7 @@ Environment variables are read from `.env` at server start.
 | `PORT` | `8787` | API and production static-server port |
 | `DATA_DIR` | `./data` | Directory for the SQLite database and uploaded images |
 | `NODE_ENV` | `development` | Set to `production` on a real deployment |
+| `ADMIN_PASSWORD` | _(unset)_ | Enables the admin controls when set. Use a long random value and keep it out of git |
 
 The owner cookie is marked `Secure` when `NODE_ENV=production`. Therefore, a
 production deployment must be served over HTTPS. If you are testing a
@@ -82,6 +84,8 @@ At startup the app creates:
 
 - `data/unsently.db` — SQLite database (WAL mode)
 - `data/uploads/` — re-encoded WebP uploads
+- `data/uploads/about-default.webp` — bundled default About image, copied on
+  startup for a fresh instance
 
 Both are ignored by git. To reset a development instance, stop the server and
 delete the `data/` directory. To back up a live instance, copy the whole data
@@ -98,11 +102,35 @@ There are no accounts, passwords, emails, or public user IDs.
 - Note APIs never return the owner hash. Ownership is checked on the server for
   edit and delete requests.
 - Clearing cookies or using another browser loses the ability to edit or delete
-  that browser's notes. There is no recovery flow.
+  that browser's notes. There is no ownership recovery flow; admin mode can
+  still moderate notes and edit About.
 - The About page is a single row. The first successful About save claims it for
   that browser. Other browsers can read it but receive `403` when they try to
-  save. Clearing the owner cookie also loses ownership of About.
+  save, unless admin mode is enabled. Clearing the owner cookie also loses
+  ownership of About.
 - The same owner cookie can own any number of notes and the About page.
+
+### Admin controls
+
+Set `ADMIN_PASSWORD` on the server to enable a private moderation mode. The lock
+button in the header opens the admin sign-in dialog.
+
+- After signing in, every note in the Home feed gets a delete button, and the
+  About page can be edited from any browser.
+- The admin session is an `HttpOnly`, `SameSite=Lax` cookie named
+  `unsently_admin`. Its value is an HMAC derived from `ADMIN_PASSWORD`; the
+  password itself is never stored in the cookie or sent back to the client after
+  login.
+- The admin cookie lasts **7 days** and is `Secure` when `NODE_ENV=production`,
+  so production must use HTTPS.
+- Signing out clears the cookie. Changing `ADMIN_PASSWORD` invalidates existing
+  admin sessions.
+- Failed logins are throttled in memory: 8 attempts per 15 minutes per client
+  address. This is per process and resets on restart.
+- If `ADMIN_PASSWORD` is unset, the admin button is hidden and admin login
+  returns `503`. The public app still works normally.
+- Keep `.env` out of git. For hosted deployments, set the password in the
+  hosting dashboard or secret manager.
 
 ### What anonymity means here
 
@@ -113,8 +141,9 @@ anyone who can reach the server. Server operators and hosting providers can
 read the database and, depending on the reverse proxy and hosting setup, may
 have request logs. Do not use this for sensitive personal information.
 
-There is no moderation or approval step. If you deploy publicly, review your
-legal and content-moderation obligations.
+There is no automated moderation or approval queue; admin mode provides manual
+moderation. If you deploy publicly, review your legal and content-moderation
+obligations.
 
 ## Notes, images, and music
 
@@ -167,10 +196,13 @@ that need ownership.
 | `GET` | `/api/notes` | Public feed, newest first |
 | `GET` | `/api/notes/mine` | Notes owned by the current cookie |
 | `POST` | `/api/notes` | Create a note (multipart form) |
-| `PATCH` | `/api/notes/:id` | Update an owned note (multipart form) |
-| `DELETE` | `/api/notes/:id` | Delete an owned note |
+| `PATCH` | `/api/notes/:id` | Update an owned note or any note as admin (multipart form) |
+| `DELETE` | `/api/notes/:id` | Delete an owned note or any note as admin |
 | `GET` | `/api/about` | About text/image and whether this browser can edit |
-| `PUT` | `/api/about` | Save the About page (multipart form) |
+| `PUT` | `/api/about` | Save the About page as owner or admin (multipart form) |
+| `GET` | `/api/admin/session` | Whether admin is configured and whether this browser is signed in |
+| `POST` | `/api/admin/login` | Sign in with `{ "password": "..." }` |
+| `POST` | `/api/admin/logout` | Clear the admin session |
 | `GET` | `/api/music/search?q=` | Proxy iTunes song search |
 
 Note form fields: `text`, `senderName`, `recipientName`, `paper`, `ink`, `font`,
@@ -199,16 +231,17 @@ the database or uploads directory as generic files.
   served with generated names.
 - Request bodies are bounded (`express.json` limit and multer field/file
   limits).
-- There is no built-in rate limiting. For a public deployment, add rate limits
-  at the reverse proxy or application layer, use TLS, keep dependencies patched,
-  and monitor disk usage.
+- Admin login is rate-limited in memory. There is no general API rate limiting;
+  for a public deployment, add rate limits at the reverse proxy or application
+  layer, use TLS, keep dependencies patched, and monitor disk usage.
 - This is a single-instance, local-disk design. It is not a distributed
   multi-tenant service.
 
 ## Deployment outline
 
 1. Use Node 22+ and install production dependencies.
-2. Set `NODE_ENV=production` and a persistent `DATA_DIR`.
+2. Set `NODE_ENV=production`, a persistent `DATA_DIR`, and a long random
+   `ADMIN_PASSWORD` in the hosting dashboard or secret manager.
 3. Run `npm run build`, then `npm start` behind an HTTPS reverse proxy.
 4. Ensure the proxy forwards the original host/protocol headers (the server
    trusts the proxy in production) and sets an appropriate request body limit.
@@ -241,12 +274,16 @@ data/                   Runtime database/uploads (ignored, created on start)
 
 ## Known limitations
 
-- Ownership is cookie-bound and cannot be recovered.
-- There is one shared About page, claimed by its first editor.
-- The feed is public and unmoderated by design.
+- Ownership is cookie-bound and cannot be recovered. The admin password is the
+  recovery path for moderation.
+- There is one shared About page, claimed by its first editor. Admin mode can
+  always edit it.
+- The feed is public. Admin mode provides manual moderation, but there is no
+  approval queue or automated filter.
 - SQLite and local disk uploads suit a single instance; scaling out requires a
   different database and object storage.
 - iTunes preview availability varies by track, region, and Apple's service.
 
-The initial About text is a neutral app description seeded on first start. It is
-intended to be replaced through the About editor.
+The initial About text is seeded on first start and can be replaced through the
+About editor. The admin password is the recovery path if the original owner
+cookie is lost.

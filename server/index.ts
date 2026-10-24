@@ -21,7 +21,22 @@ import {
   updateAbout,
 } from './db.js'
 import { currentOwnerHash, ensureOwner } from './auth.js'
-import { removeImage, saveImage, upload } from './uploads.js'
+import {
+  adminEnabled,
+  adminLoginKey,
+  adminLoginRateLimited,
+  clearAdminLoginFailures,
+  isAdmin,
+  loginAdmin,
+  logoutAdmin,
+  recordAdminLoginFailure,
+} from './admin.js'
+import {
+  ensureDefaultAboutImage,
+  removeImage,
+  saveImage,
+  upload,
+} from './uploads.js'
 import { sanitizeMusic, searchMusic } from './music.js'
 
 class ApiError extends Error {
@@ -107,6 +122,8 @@ function isRemoveRequested(value: unknown): boolean {
   return value === 'true' || value === '1'
 }
 
+ensureDefaultAboutImage()
+
 const app = express()
 
 if (IS_PROD) app.set('trust proxy', 1)
@@ -149,6 +166,46 @@ app.use('/api', (_req, res, next) => {
   res.setHeader('Cache-Control', 'no-store')
   next()
 })
+
+app.get(
+  '/api/admin/session',
+  asyncHandler(async (req, res) => {
+    res.json({ enabled: adminEnabled(), isAdmin: isAdmin(req) })
+  }),
+)
+
+app.post(
+  '/api/admin/login',
+  asyncHandler(async (req, res) => {
+    if (!adminEnabled()) {
+      throw new ApiError(503, 'Admin is not configured.')
+    }
+
+    const loginKey = adminLoginKey(req)
+    if (adminLoginRateLimited(loginKey)) {
+      throw new ApiError(429, 'Too many attempts. Try again later.')
+    }
+
+    const password =
+      typeof req.body?.password === 'string' ? req.body.password : ''
+
+    if (!loginAdmin(req, res, password)) {
+      recordAdminLoginFailure(loginKey)
+      throw new ApiError(401, 'Incorrect password.')
+    }
+
+    clearAdminLoginFailures(loginKey)
+    res.json({ isAdmin: true })
+  }),
+)
+
+app.post(
+  '/api/admin/logout',
+  asyncHandler(async (_req, res) => {
+    logoutAdmin(res)
+    res.json({ ok: true })
+  }),
+)
 
 app.get(
   '/api/notes',
@@ -229,7 +286,10 @@ app.patch(
     if (!existing) throw new ApiError(404, 'Note not found.')
 
     const ownerHash = currentOwnerHash(req)
-    if (!ownerHash || existing.owner_hash !== ownerHash) {
+    if (
+      !isAdmin(req) &&
+      (!ownerHash || existing.owner_hash !== ownerHash)
+    ) {
       throw new ApiError(403, 'You can only edit your own notes.')
     }
 
@@ -296,7 +356,10 @@ app.delete(
     if (!existing) throw new ApiError(404, 'Note not found.')
 
     const ownerHash = currentOwnerHash(req)
-    if (!ownerHash || existing.owner_hash !== ownerHash) {
+    if (
+      !isAdmin(req) &&
+      (!ownerHash || existing.owner_hash !== ownerHash)
+    ) {
       throw new ApiError(403, 'You can only delete your own notes.')
     }
 
@@ -331,7 +394,9 @@ app.get(
     const row = getAbout()
     const ownerHash = currentOwnerHash(req)
     const canEdit =
-      !row.owner_hash || (!!ownerHash && row.owner_hash === ownerHash)
+      isAdmin(req) ||
+      !row.owner_hash ||
+      (!!ownerHash && row.owner_hash === ownerHash)
 
     res.json({
       about: {
@@ -351,7 +416,7 @@ app.put(
     const row = getAbout()
     const ownerHash = currentOwnerHash(req)
 
-    if (row.owner_hash && row.owner_hash !== ownerHash) {
+    if (row.owner_hash && row.owner_hash !== ownerHash && !isAdmin(req)) {
       throw new ApiError(403, 'This About page is not yours to edit.')
     }
 

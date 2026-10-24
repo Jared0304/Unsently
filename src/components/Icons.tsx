@@ -139,6 +139,16 @@ export function CheckIcon(props: IconProps) {
   )
 }
 
+export function LockIcon(props: IconProps) {
+  return (
+    <Base {...props}>
+      <rect x="5" y="10.2" width="14" height="9.6" rx="2" />
+      <path d="M8.2 10.2V7.9a3.8 3.8 0 0 1 7.6 0v2.3" />
+      <path d="M12 14.1v2" />
+    </Base>
+  )
+}
+
 export function SearchIcon(props: IconProps) {
   return (
     <Base {...props}>

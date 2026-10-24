@@ -1,5 +1,5 @@
 import Database from 'better-sqlite3'
-import { DB_PATH } from './config.js'
+import { DB_PATH, DEFAULT_ABOUT_IMAGE } from './config.js'
 
 export const db = new Database(DB_PATH)
 
@@ -39,14 +39,14 @@ db.exec(`
 `)
 
 export const DEFAULT_ABOUT_TEXT =
-  'Unsently is a quiet place for anonymous notes and unsent letters.'
+  'A little space for unsent words, hidden feelings, and quiet confessions. Leave a note, share a memory, and let your words find their way to someone.'
 
 const now = new Date().toISOString()
 
 db.prepare(
   `INSERT OR IGNORE INTO about (id, text, image_file, owner_hash, updated_at)
-   VALUES (1, ?, NULL, NULL, ?)`,
-).run(DEFAULT_ABOUT_TEXT, now)
+   VALUES (1, ?, ?, NULL, ?)`,
+).run(DEFAULT_ABOUT_TEXT, DEFAULT_ABOUT_IMAGE, now)
 
 export interface NoteMusic {
   trackId: string
